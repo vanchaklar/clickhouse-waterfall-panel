@@ -1,0 +1,87 @@
+# Uncomment to use custom http handlers.
+# rules are checked from top to bottom, first match runs the handler
+# url - to match request URL, you can use 'regex:' prefix to use regex match(optional)
+# methods - to match request method, you can use commas to separate multiple method matches(optional)
+# headers - to match request headers, match each child element(child element name is header name), you can use 'regex:' prefix to use regex match(optional)
+# handler is request handler
+# type - supported types: static, dynamic_query_handler, predefined_query_handler
+# query - use with predefined_query_handler type, executes query when the handler is called
+# query_param_name - use with dynamic_query_handler type, extracts and executes the value corresponding to the <query_param_name> value in HTTP request params
+# status - use with static type, response status code
+# content_type - use with static type, response content-type
+# response_content - use with static type, Response content sent to client, when using the prefix 'file://' or 'config://', find the content from the file or configuration send to client.
+
+http_handlers:
+  rule:
+    url: /resources/styles.css
+    methods: GET
+    handler:
+      type: static
+      status: 200
+      content_type: text/css
+      response_content: file:///www/resources/styles.css
+  rule:
+    url: /resources/utils.js
+    methods: GET
+    handler:
+      type: static
+      status: 200
+      content_type: text/javascript
+      response_content: file:///www/resources/utils.js
+  rule:
+    url: /resources/graphs.css
+    methods: GET
+    handler:
+      type: static
+      status: 200
+      content_type: text/css
+      response_content: file:///www/resources/graphs.css
+  rule:
+    url: /resources/graph-visualizer.js
+    methods: GET
+    handler:
+      type: static
+      status: 200
+      content_type: text/javascript
+      response_content: file:///www/resources/graph-visualizer.js
+  rule:
+    url: /monitoring/endpoints
+    methods: GET
+    handler:
+      type: predefined_query_handler
+      query: show tables in monitoring where name not like '.%' and name not like '_temp%' SETTINGS workload = 'monitoring' format JSON
+  rule:
+    url: regex:/monitoring/(?P<endpoint>[^/]+)
+    methods: GET
+    handler:
+      type: predefined_query_handler
+      query: select * from monitoring.{endpoint:Identifier} SETTINGS workload = 'monitoring' format JSON
+  rule:
+    url: /monitoring
+    methods: GET
+    handler:
+      type: static
+      status: 200
+      content_type: text/html 
+      response_content: file:///www/monitoring.html
+  rule:
+    url: /admin/endpoints
+    methods: GET
+    handler:
+      type: predefined_query_handler
+      query: show tables in admin_panel where name not like '.%' and name not like '_temp%' format JSON
+  rule:
+    url: regex:/admin/(?P<endpoint>[^/]+)
+    methods: GET
+    handler:
+      type: predefined_query_handler
+      query: select * from admin_panel.{endpoint:Identifier} format JSON
+  rule:
+    url: /admin
+    methods: GET
+    handler:
+      type: static
+      status: 200
+      content_type: text/html 
+      response_content: file:///www/admin.html
+  defaults: ''
