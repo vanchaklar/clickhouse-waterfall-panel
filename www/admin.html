@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clickhouse Admin</title>
+    <link rel="icon"
+        href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1NCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDExIDEwIj48c3R5bGU+LmJne2ZpbGw6IzAwMH0ub3tmaWxsOiNmZjB9PC9zdHlsZT48cmVjdCBjbGFzcz0iYmciIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiLz48cGF0aCBkPSJNMSwxIGgxIHY4IGgtMSB6IiBjbGFzcz0ibyIvPjxwYXRoIGQ9Ik0zLDEgaDEgdjggaC0xIHoiIGNsYXNzPSJvIi8+PHBhdGggZD0iTTUsMSBoMSB2OCBoLTEgeiIgY2xhc3M9Im8iLz48cGF0aCBkPSJNNywxIGgxIHY4IGgtMSB6IiBjbGFzcz0ibyIvPjxwYXRoIGQ9Ik05LDQuMjUgaDEgdjEuNSBoLTEgeiIgY2xhc3M9Im8iLz48L3N2Zz4">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="/resources/styles.css" />
+    <link rel="stylesheet" href="/resources/graphs.css" />
+    <!-- Add SQL formatter and highlighter -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql-formatter/12.2.3/sql-formatter.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js" crossorigin="anonymous"></script>
+
+    <script src="/resources/utils.js"></script>
+    <script src="/resources/graph-visualizer.js"></script>
+</head>
+
+<body>
+    <div id="content">
+        <div id="login-container"><input type="checkbox" id="show-login" class="checkbox" /><label
+                for="show-login">login</label>
+            <div class="tab">
+                <input type="text" placeholder="username" id="username" name="username" required autocomplete="username"
+                    value="monitoring" /><br />
+                <input type="password" placeholder="password" id="password" name="password" required
+                    autocomplete="current-password" /><br />
+                <button onclick="login()">login</button>
+            </div>
+        </div>
+        <div><input type="checkbox" id="shell-section" class="checkbox" /><label for="shell-section">shell</label>
+            <div id="shell-container" class="shell tab">
+                <!-- query type selector -->
+                <select id="query-type" name="query-type" value="clickhouse" onchange="loadSources(this.value)">
+                    <option value="sql" selected>SQL</option>
+                    <option value="clickhouse">ClickHouse</option>
+                    <option value="jdbc">JDBC</option>
+                    <option value="mysql">MySQL</option>
+                    <option value="postgres">PostgreSQL</option>
+                    <option value="mongo">MongoDB</option>
+                </select>
+                <!-- source selector -->
+                <select id="source-selector" name="source-selector" onchange="loadDatabases()"></select>
+                <select id="database-selector" name="database-selector" onchange="loadSchemas()"></select>
+                <select id="schema-selector" name="schema-selector" onchange="loadTables()"></select>
+                <select id="table-selector" name="table-selector" onchange=""></select>
+                <button id="generate-select-query" onclick="generateQuery('select')">Generate Select</button>
+                <button id="generate-select-query" onclick="generateQuery('show-create')">Show Create</button>
+                <br />
+
+                <button id="generate-dam-table-query" onclick="generateQuery('create-dam-table')">Generate dam
+                    Table</button>
+                <button id="generate-spring-table-query" onclick="generateQuery('create-spring-view')">Generate spring
+                    View</button>
+                <button id="generate-swamp-table-query" onclick="generateQuery('create-swamp-table')">Generate swamp
+                    Table</button>
+                <button id="generate-flow-table-query" onclick="generateQuery('create-flow-view')">Generate flow
+                    View</button>
+                <button id="generate-lake-table-query" onclick="generateQuery('create-lake-table')">Generate lake
+                    Table</button>
+                <button id="generate-river-table-query" onclick="generateQuery('create-river-view')">Generate river
+                    View</button>
+                <button id="generate-pool-table-query" onclick="generateQuery('create-pool-table')">Generate pool
+                    Table</button>
+                <button id="generate-geyser-table-query" onclick="generateQuery('create-geyser-view')">Generate geyser
+                    View</button>
+                <br />
+
+                <!-- <button id="column-definition-query" onclick="generateQuery('column-definition')">Column Definition</button> -->
+                <button id="describe-query" onclick="executeShellQuery('describe')">Describe</button>
+                <button id="explain-estimate-query" onclick="executeShellQuery('explain estimate')">Explain
+                    Estimate</button>
+                <button id="explain-syntax-query" onclick="executeShellQuery('explain syntax')">Explain Syntax</button>
+                <button id="clear-query" onclick="clearQuery()">Clear Query</button>
+
+                <input type="checkbox" class="checkbox" id="show-editor" checked />
+                <button for="show-editor" class="label"
+                    onclick="document.getElementById('show-editor').checked = true">show editor</button>
+                <button onclick="executeShellQuery()">run <span
+                        style="color: #888; font-weight: lighter;">(Ctrl+Enter)</span></button>
+                <div id="editor-container">
+                    <button class="format-sql" onclick="document.getElementById('show-editor').checked = false"
+                        title="Hide Editor">X</button>
+                    <button class="format-sql" onclick="formatSQL()" title="Format SQL" style="right: 36px;">⚙</button>
+                    <textarea id="shell" placeholder="query" class="sql" spellcheck="false" onchange="highlightSQL()"
+                        onmousemove="highlightSQL()">select number, map(number,number)::JSON as mp from numbers(10)</textarea><br />
+                </div>
+                <div class="progress-bar" id="query-errors"></div>
+                <div class="progress-bar" id="query-progress"></div>
+                <pre id="shell-result"></pre>
+            </div>
+        </div>
+        <div><input type="checkbox" id="waterfall-designer" class="checkbox" checked /><label
+                for="waterfall-designer">waterfall designer</label>
+            <div id="waterfall-designer-container" class="tab">
+                <div id="section-waterfall_overview">
+                    <input type="checkbox" id="waterfall_overview" class="checkbox"
+                        onchange="if(!this.checked) {loadData('waterfall_overview')}" checked />
+                    <label for="waterfall_overview">waterfall_overview</label>
+                </div>
+                <div id="section-waterfall_graph">
+                    <input type="checkbox" id="waterfall_graph" class="checkbox"
+                        onchange="if(!this.checked) {loadGraph('waterfall_graph_edges')}" checked />
+                    <label for="waterfall_graph">waterfall_graph</label>
+                    <div class="schema-container">
+                        <div id="schema-diagram">
+                            <pre class="mermaid">
+    flowchart TB
+    %% Diagram content will be inserted here by JavaScript
+                            </pre>
+                        </div>
+                    </div>
+                    <div id="raw-schema" class="raw-schema"></div>
+                </div>
+                <div id="section-view_refreshes">
+                    <input type="checkbox" id="view_refreshes" class="checkbox"
+                        onchange="if(!this.checked) {loadViewRefreshes()}" checked />
+                    <label for="view_refreshes">view_refreshes</label>
+                </div>
+                <div id="section-waterfall_tables">
+                    <input type="checkbox" id="waterfall_tables" class="checkbox"
+                        onchange="if(!this.checked) {loadWaterfallTables()}" checked />
+                    <label for="waterfall_tables">waterfall_tables</label>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="sidebar">
+
+        <div id="section-requests-status"><input type="checkbox" id="requests-status" class="checkbox">
+            <label for="requests-status">requests</label>
+            <div id="requests-status-container" class="tab">Requests: 0<br>Responses: 0</div>
+        </div>
+        <div><input type="checkbox" id="show-params" class="checkbox" checked /><label for="show-params">params</label>
+            <div id="params-container" class="tab">
+                <button onclick="document.getElementById('shell').value = getElementById('param_').value"
+                    class="action-button">🡸</button><button
+                    onclick="getElementById('param_').value = document.getElementById('shell').value"
+                    class="action-button">🡺</button><textarea id="param_"
+                    style="width: 250px; height: 30px; margin: 2px; box-sizing: border-box; vertical-align: top; color: rgb(255, 255, 255); resize: none;"></textarea><span
+                    for="param_" style="display: inline-block; margin-left: 10px;"></span><br>
+            </div>
+        </div>
+        <div id="section-templates"><input type="checkbox" id="templates" class="checkbox"
+                onchange="if(!this.checked) {loadData('templates')}" checked /><label for="templates">templates</label>
+        </div>
+        <div id="section-query_log"><input type="checkbox" id="query_log" class="checkbox"
+                onchange="if(!this.checked) {loadData('query_log')}" checked /><label for="query_log">query_log</label>
+        </div>
+        <div id="section-watcher"><input type="checkbox" id="watcher" class="checkbox" onchange="stopWatcher()"
+                checked />
+            <label for="watcher">watcher</label>
+            <div id="watcher-container" class="tab">
+                <button onclick="startWatcher()" class="action-button">▶</button><button onclick="stopWatcher()"
+                    class="action-button">■</button><button
+                    onclick="document.getElementById('shell').value = getElementById('watcher_query').value"
+                    class="action-button">🡸</button><button
+                    onclick="getElementById('watcher_query').value = document.getElementById('shell').value"
+                    class="action-button">🡺</button><textarea id="watcher_query"
+                    style="width: 250px; height: 30px; margin: 2px; box-sizing: border-box; vertical-align: top; color: rgb(255, 255, 255); resize: none;">select * from monitoring.processes</textarea><span
+                    for="watcher_query" style="display: inline-block; margin-left: 10px;">query</span><br>
+                <div id="watcher_result"></div>
+            </div>
+        </div>
+        <div id="section-shortcuts"><input type="checkbox" id="shortcuts" class="checkbox" checked />
+            <label for="shortcuts">shortcuts</label>
+            <div id="shortcuts-container" class="tab">
+                <button onclick="executeQuery('system start views')" class="action-button">▶</button><span
+                    style="display: inline-block; margin-left: 10px;">start views</span><br>
+                <button onclick="executeQuery('system stop views')" class="action-button">■</button><span
+                    style="display: inline-block; margin-left: 10px;">stop views</span><br>
+                <button onclick="executeScript('enable_force_restore_data.sh')" class="action-button">🗘</button><span
+                    style="display: inline-block; margin-left: 10px;">enable_force_restore_data.sh</span>
+            </div>
+        </div>
+    </div>
+    <div id="data-container">
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            highlightSQL();
+            login();
+        });
+
+
+        // Initialize syntax highlighting
+        document.getElementById('shell').addEventListener('input', () => {
+            // Remove existing highlighting
+            const existing = document.querySelector('.hljs.sql');
+            if (existing) existing.remove();
+            highlightSQL();
+        });
+
+        // Initial highlighting
+        document.addEventListener('DOMContentLoaded', () => {
+            highlightSQL();
+        });
+
+        document.getElementById('shell').addEventListener('keydown', event => {
+            if ((event.metaKey || event.ctrlKey) && (event.keyCode == 13 || event.keyCode == 10)) {
+                executeShellQuery();
+                event.preventDefault();
+            }
+        });
+
+        async function loadGraph(endpoint) {
+            try {
+                const response = await fetchData(endpoint);
+                if (!response || !response.data) {
+                    console.error('Invalid data received from endpoint');
+                    return;
+                }
+
+                const graphData = response.data;
+                if (!Array.isArray(graphData)) {
+                    console.error('Expected array of edges, got:', typeof graphData);
+                    return;
+                }
+
+                // Visualize new data
+                visualizeGraph(graphData);
+            } catch (error) {
+                console.error('Error loading graph:', error);
+            }
+        }
+
+    </script>
+</body>
+
+</html>

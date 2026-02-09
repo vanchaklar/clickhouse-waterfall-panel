@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clickhouse Monitoring</title>
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1NCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDExIDEwIj48c3R5bGU+LmJne2ZpbGw6IzAwMH0ub3tmaWxsOiNmZjB9PC9zdHlsZT48cmVjdCBjbGFzcz0iYmciIHg9IjAiIHk9IjAiIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiLz48cGF0aCBkPSJNMSwxIGgxIHY4IGgtMSB6IiBjbGFzcz0ibyIvPjxwYXRoIGQ9Ik0zLDEgaDEgdjggaC0xIHoiIGNsYXNzPSJvIi8+PHBhdGggZD0iTTUsMSBoMSB2OCBoLTEgeiIgY2xhc3M9Im8iLz48cGF0aCBkPSJNNywxIGgxIHY4IGgtMSB6IiBjbGFzcz0ibyIvPjxwYXRoIGQ9Ik05LDQuMjUgaDEgdjEuNSBoLTEgeiIgY2xhc3M9Im8iLz48L3N2Zz4">
+    <style>
+        :root {
+            --bar-color: rgba(255, 255, 255, 0.176); 
+            --element-background-color: #1e1e1e;
+        }
+        body {
+            font-family: monospace;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+        }
+        #sidebar {
+            position: fixed;
+            right: 10px;
+            background-color: #1e1e1e;
+            padding: 10px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
+            transition: transform 1s ease;
+            user-select: none;
+            transform: translateX(220px);
+            overflow-y: auto;
+        }
+        #sidebar:hover {
+            transform: translateX(0);
+            transition: transform 0.3s ease;
+        }
+        #shell-result {
+            white-space: pre-wrap;
+            max-height: 180px;
+            overflow: auto;
+        }
+        #sidebar input {
+            width: 240px;
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+            border: 1px solid #333;
+        }
+        #sidebar textarea, #sidebar #highlighted-sql {
+            width: 240px;
+            height: 200px;
+            margin: 5px 0;
+            padding: 5px;
+            top: 0;
+            left: 0;
+            background-color: #1e1e1e;
+            border: 1px solid #33333300;
+            color: #e0e0e0;
+            font-size: medium;
+            font-weight: 500;
+            text-wrap: wrap;
+            resize: none;
+        }
+        #sidebar textarea{
+            font-weight: 600;
+            border: 1px solid #333;      
+            color: #e0e0e010;
+        }
+        #sidebar button {
+            width: 250px;
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+            border: 1px solid #333;
+        }
+        #sidebar button:hover {
+            background-color: #333;
+        }
+        #sidebar button:active {
+            background-color: #555;
+        }
+        #sidebar button:focus {
+            outline: none;
+        }
+        #sidebar button:disabled {
+            background-color: #333;
+            cursor: not-allowed;
+        }
+        #sidebar button:disabled:hover {
+            background-color: #333;
+        }
+        #sidebar h3 {
+            margin: 0;
+            padding: 0;
+        }
+        #content {
+            flex-grow: 1;
+            padding: 0px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #1e1e1e;
+        }
+        th, td {
+            max-height: 15px;
+            min-height: 15px;
+            max-width: 250px;
+            overflow: hidden;
+            height: 15px;
+            text-align: left;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            text-wrap-mode: nowrap;
+        }
+        tr:hover {
+            background-color: #2c2c2c;
+        }
+        td {
+            user-select: all;
+        }
+        td:hover .tooltip {
+            visibility: visible;
+        }
+        .tooltip {
+            visibility: hidden;
+            max-width: 800px;
+            max-height: 600px;
+            background-color: #333;
+            color: #e0e0e0;
+            text-align: left;
+            overflow: hidden;
+            text-wrap-mode: wrap;
+            border-radius: 6px;
+            padding: 5px;
+            position: fixed;
+            z-index: 1;
+            left: 0px;
+            bottom: 0px;
+            margin: 0px;
+        }
+        th {
+            background-color: #333;
+        }
+        .checkbox {
+            display: none;
+        }
+        .checkbox~table {
+            display: table;
+        }
+        .checkbox:checked~table {
+            display: none;
+        }
+        label {
+            cursor: pointer;
+            display: block;
+            font-size: 1.2em;
+            margin: 10px 0;
+            color: #e0e0e0;
+        }
+        .checkbox:checked~label{
+            display: none;
+        }
+        label.inactive {
+            color: #888;
+        }
+        .draggable {
+            user-select: none;
+        }
+        div#data-container > div {
+            width: 1760px;
+        }
+        #sidebar #refresh-rate {
+            width: 50px;
+        }
+        #sidebar button {
+            margin-top: 5px; /* Added margin for better spacing */
+        }
+        .control-button:disabled {
+            display: none;
+        }
+        #shell-container {
+            position: relative;
+        }
+        .error {
+            color: #F00;
+            background-color: var(--element-background-color-fail);
+            padding: 5px;
+        }
+        .progress-bar {
+            height: 2px;
+            background-color: var(--progress-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        #shell {
+            /*font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;*/
+            tab-size: 2;
+        }
+        
+        .format-sql {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            width: 24px !important;
+            height: 24px;
+            padding: 0 !important;
+            line-height: 24px;
+            text-align: center;
+            font-size: 14px;
+            cursor: pointer;
+            background: #333 !important;
+            border-radius: 4px;
+            opacity: 0.7;
+        }
+
+        .format-sql:hover {
+            opacity: 1;
+        }
+
+        .hljs {
+            background: transparent !important;
+        }
+        tr.totals>td {
+            font-weight: bold;
+            border-top: 2px solid #888;
+        }
+    </style>
+    <!-- Add SQL formatter and highlighter -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql-formatter/12.2.3/sql-formatter.min.js"></script>
+</head>
+<body>
+    <div id="sidebar">
+        <h3>Controls</h3><div id="controls-container">
+            refresh rate: <input type="number" id="refresh-rate" value="15" min="1" max="3600" step="1" onchange="updateRefreshRate()"/> seconds<br />
+            <button class="control-button" onclick="pauseRefresh()" >pause refresh</button><button class="control-button" onclick="resumeRefresh()" disabled>resume refresh</button>
+        </div><hr /><br />
+        <h3>Monitoring Items</h3><div id="endpoint-list"></div><hr /><br />
+        <h3>Shell</h3>
+        <div id="shell-container" class="shell">
+            <input type="text" placeholder="username" id="username" value="monitoring" /><br />
+            <input type="password" placeholder="password" id="password" value="" /><br />
+            <div style="position: relative;">
+                <button class="format-sql" onclick="formatSQL()" title="Format SQL">⚙</button>
+                <textarea id="shell" placeholder="query" class="sql" onchange="highlightSQL()" onmousemove="highlightSQL()">select today() as result</textarea><br />
+            </div>
+            <div class="progress-bar" id="query-errors"></div>
+            <button onclick="executeQuery()">run</button><br />
+            <pre id="shell-result"></pre>
+        </div>
+    </div>
+    <div id="content"><div id="data-container"></div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchEndpoints();
+            applyStoredPositions();
+            highlightSQL();
+        });
+
+        let refreshIntervals = [];
+        let shouldFetch = true;
+        function updateRefreshRate() {
+            const refreshRate = document.getElementById('refresh-rate').value;
+            if (refreshRate < 1 || refreshRate > 3600) {
+                alert('Please enter a value between 1 and 3600 seconds.');
+                return;
+            }
+            localStorage.setItem('refresh-rate', refreshRate);
+            // wait for a short time to ensure the value wont change again. abort if the user changes the value again.
+            shouldFetch = true;
+            setTimeout(() => {
+                if (shouldFetch) {
+                    fetchEndpoints(); // would clear the intervals and set new ones
+                }
+                shouldFetch = false; // Prevent further fetches until refresh rate is updated
+            }, 1000); // Adding a short delay before fetching endpoints
+        }
+        let isPaused = false;
+        pauseRefresh = () => {
+            isPaused = true;
+            document.querySelector('.control-button[onclick="resumeRefresh()"]').disabled = false; // Enable the Resume button when paused
+            document.querySelector('.control-button[onclick="pauseRefresh()"]').disabled = true; // Disable the Pause button when paused
+        }
+        resumeRefresh = () => {
+            isPaused = false;
+            document.querySelector('.control-button[onclick="resumeRefresh()"]').disabled = true; // Disable the Resume button when resumed
+            document.querySelector('.control-button[onclick="pauseRefresh()"]').disabled = false; // Enable the Pause button when resumed
+            fetchEndpoints();
+        }
+
+        async function fetchEndpoints() {
+
+            try {
+                const username = document.getElementById('username').value;
+                if (!username) {
+                    username = 'monitoring';
+                    user_credential = `user=${username}`;
+                } else {
+                    const password = encodeURIComponent(document.getElementById('password').value);
+                    user_credential = `user=${username}&password=${password}`;
+                }
+                const response = await fetch(`/monitoring/endpoints?${user_credential}`);
+                const data = await response.json();
+                const container = document.getElementById('data-container');
+                const endpointList = document.getElementById('endpoint-list');
+                container.innerHTML = '';
+                endpointList.innerHTML = '';
+                data.data.forEach(endpoint => {
+                    const section = document.createElement('div');
+                    section.id = `section-${endpoint.name}`;
+                    section.className = 'draggable';
+                    section.draggable = true;
+                    section.ondragstart = dragStart;
+                    section.ondragover = dragOver;
+                    section.ondrop = drop;
+                    const title = document.createElement('label');
+                    title.htmlFor = endpoint.name;
+                    title.innerText = endpoint.name;
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = endpoint.name;
+                    checkbox.className = 'checkbox';
+                    checkbox.checked = JSON.parse(localStorage.getItem(`checkbox-${endpoint.name}`)) || false;
+                    checkbox.onchange = storeCheckboxValues;
+                    section.appendChild(checkbox);
+                    section.appendChild(title);
+                    container.appendChild(section);
+
+                    const endpointItem = document.createElement('label');
+                    endpointItem.id = 'shortcut-' + endpoint.name;
+                    endpointItem.htmlFor = endpoint.name;
+                    endpointItem.innerText = endpoint.name;
+                    endpointItem.className = checkbox.checked ? 'inactive' : '';
+                    endpointItem.onclick = () => {
+                        document.getElementById(endpoint.name).scrollIntoView();
+                    };
+                    endpointList.appendChild(endpointItem);
+
+                    fetchData(endpoint.name);
+                    const refreshRate = localStorage.getItem('refresh-rate') || 1;
+                    // Ensure refreshRate is a number
+                    const parsedRefreshRate = parseInt(refreshRate, 10) || 1;
+                    
+                    // Clear any existing intervals for this endpoint
+                    try {
+                        clearInterval(refreshIntervals[endpoint.name]);
+                    } catch (error) {
+                        // nothing to clear
+                    }
+                    // Set a new interval for this endpoint
+                    refreshIntervals[endpoint.name] = setInterval(() => {
+                        fetchData(endpoint.name);
+                    }, parsedRefreshRate * 1000); // Use parsedRefreshRate instead of refreshRate
+                });
+                setTimeout(applyStoredPositions, 1000);
+            } catch (error) {
+                console.error('Error fetching endpoints:', error);
+            }
+        }
+
+        async function fetchData(endpoint = null) {
+            try {
+                if (isPaused) {
+                    return;
+                }
+                if (!endpoint) {
+                    endpoint = localStorage.getItem('endpoint');
+                }
+                if (!endpoint) {
+                    return;
+                }
+                isVisible = !document.getElementById(`section-${endpoint}`).getElementsByTagName('input')[0].checked;
+                if(!isVisible){
+                    return;
+                }
+                const username = document.getElementById('username').value; // Get the username value
+                if (!username) {
+                    username = 'monitoring';
+                    user_credential = `&user=${username}`;
+                } else {
+                    const password = encodeURIComponent(document.getElementById('password').value);
+                    user_credential = `&user=${username}&password=${password}`;
+                }
+                const response = await fetch(`/monitoring/${endpoint}?extremes=1${user_credential}`);
+                const data = await response.json();
+                const container = document.getElementById('data-container');
+                let section = document.getElementById(`section-${endpoint}`);
+                const old = section.getElementsByTagName('table');
+                const tableElement = createTable(data);
+                if (old.length > 0) {
+                    section.removeChild(old[0]);
+                }
+                section.appendChild(tableElement);
+            } catch (error) {
+                let section = document.getElementById(`section-${endpoint}`);
+                const old = section.getElementsByTagName('table');
+                if (old.length > 0) {
+                    section.removeChild(old[0]);
+                }
+            }
+        }
+                
+        function createTable(data, extra_cell_content_function = null) {
+            let tableElement = document.createElement('table');
+            let header = document.createElement('tr');
+            // Store column metadata and extremes
+            let columnTypes = {};
+            let columnExtremes = {};
+
+            // Get column types and initialize extremes
+            data.meta.forEach(col => {
+                columnTypes[col.name] = col.type;
+                let min = undefined, max = undefined;
+                try {
+                    if (data.extremes) {
+                        min = parseFloat(data.extremes.min[col.name])
+                        max = parseFloat(data.extremes.max[col.name])
+                    }
+                    if (data.totals) {
+                        if (min !== undefined) {
+                            min = (parseFloat(data.totals[col.name]) > min) ? min : data.totals[col.name]
+                        } else {
+                            min = parseFloat(data.totals[col.name])
+                        }
+                        if (max !== undefined) {
+                            max = (parseFloat(data.totals[col.name]) < max) ? max : data.totals[col.name]
+                        } else {
+                            max = parseFloat(data.totals[col.name])
+                        }
+                    }
+                    columnExtremes[col.name] = { min, max };
+                }
+                catch (e) {
+                    showError('Error parsing extremes:', e);
+                }
+            });
+
+            // Create header
+            data.meta.forEach(col => {
+                let th = document.createElement('th');
+                th.innerText = col.name;
+                header.appendChild(th);
+            });
+            tableElement.appendChild(header);
+
+            // Create rows
+            function f(row, isTotals = false) {
+                let tr = document.createElement('tr');
+                tr.setAttribute('class', isTotals ? 'totals' : '');
+                Object.entries(row).forEach(([key, value]) => {
+                    let td = document.createElement('td');
+                    if (value === null) {
+                        value = 'ᴺᵁᴸᴸ';
+                    } else if (typeof value === 'object') {
+                        try {
+                            if (shouldPivot && hasSecondHeader && columnExtremes[key] && typeof (columnExtremes[key].min) === 'object') {
+                                subColumns = columnExtremes[key].min;
+                                Object.entries(subColumns).forEach(([index, _]) => { // Corrected to use forEach
+                                    let td2 = document.createElement('td');
+                                    if (value[index] === undefined) {
+                                        value[index] = 'ᴺᵁᴸᴸ';
+                                    } else if (value[index] === null) {
+                                        value[index] = 'ᴺᵁᴸᴸ';
+                                    }
+                                    if (typeof value[index] === 'object') {
+                                        value[index] = JSON.stringify(value[index]);
+                                    }
+                                    td2.innerText = value[index];
+                                    tr.appendChild(td2);
+                                });
+                                return; // Added return statement to exit the function
+                            } else {
+                                value = JSON.stringify(value);
+                            }
+                        } catch (error) {
+                            showError('Error processing object value:', error);
+                        }
+                    }
+                    td.onclick = () => {
+                        let shellTextarea = document.getElementById('shell');
+                        shellTextarea.value = value;
+                        shellTextarea.focus();
+                        shellTextarea.lang = 'sql';
+                        
+                        // Calculate content width
+                        const tempSpan = document.createElement('span');
+                        tempSpan.style.visibility = 'hidden';
+                        tempSpan.style.whiteSpace = 'pre';
+                        tempSpan.style.font = window.getComputedStyle(shellTextarea).font;
+                        tempSpan.textContent = value;
+                        document.body.appendChild(tempSpan);
+                        
+                        // Set width (with some padding)
+                        const width = Math.min(Math.max(tempSpan.offsetWidth + 20, 240), 800);
+                        shellTextarea.style.width = width + 'px';
+                        
+                        document.body.removeChild(tempSpan);
+                        
+                        // Add blur event handler if not already added
+                        if (!shellTextarea.hasBlurHandler) {
+                            shellTextarea.addEventListener('blur', () => {
+                                shellTextarea.style.width = '240px';
+                            });
+                            shellTextarea.hasBlurHandler = true;
+                        }
+                    };
+                    td.innerText = value;
+
+                    // Add background gradient for numeric columns if we have extremes
+                    try {
+                        if (columnTypes[key]?.match(/^(Nullable\()?(U?Int|Decimal|Float)/) && columnExtremes[key]) {
+                            let numValue = Number(value);
+                            let { min, max } = columnExtremes[key];
+                            if (!isNaN(numValue) && max >= min) {
+                                if (min > 0) {
+                                    min = 0;
+                                }
+                                if (max < 0) {
+                                    max = 0;
+                                }
+                                let ratio = 0; // Set ratio to 0 if min equals max
+                                if (!(max - min === 0)) {
+                                    ratio = 100 * (numValue - min) / (max - min);
+                                }
+                                td.style.background = `linear-gradient(to right, 
+                                        var(--bar-color) 0%, 
+                                        var(--bar-color) ${ratio}%, 
+                                        var(--element-background-color) ${ratio}%, 
+                                        var(--element-background-color) 100%)`;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error applying background gradient:', error);
+                    }
+
+                    // Add tooltip for multiline values
+                    try {
+                        if (value && typeof (value) == 'string' && value.includes('\n')) {
+                            let multi_line_value = value.replace(/\n/g, '<br>');
+                            let tooltip = document.createElement('pre');
+                            tooltip.innerHTML = multi_line_value;
+                            tooltip.className = 'tooltip';
+                            td.innerText = value.split('\n')[0];
+                            td.appendChild(tooltip);
+                        }
+                    } catch (error) {
+                        console.error('Error creating tooltip:', error);
+                    }
+                    tr.appendChild(td);
+                });
+                if (extra_cell_content_function) {
+                    tr.appendChild(extra_cell_content_function(row))
+                }
+                tableElement.appendChild(tr);
+            }
+            data.data.forEach(row => f(row));
+            if (data.totals) { f(data.totals, true) }
+            return tableElement;
+        }
+
+        function dragStart(event) {
+            event.dataTransfer.setData('text/plain', event.target.id);
+        }
+
+        function dragOver(event) {
+            event.preventDefault();
+        }
+
+        function drop(event) {
+            event.preventDefault();
+            const id = event.dataTransfer.getData('text/plain');
+            const draggableElement = document.getElementById(id);
+            const dropzone = event.target.closest('.draggable');
+            if (dropzone && dropzone !== draggableElement) {
+                const container = document.getElementById('data-container');
+                container.insertBefore(draggableElement, dropzone.nextSibling);
+                storePositions();
+                applyStoredPositions(false)
+            }
+        }
+
+        function storePositions() {
+            const container = document.getElementById('data-container');
+            const sections = container.getElementsByClassName('draggable');
+            const positions = Array.from(sections).map(section => section.id.split('-')[1]);
+            localStorage.setItem('positions', JSON.stringify(positions));
+        }
+
+        function applyStoredPositions(all=true) {
+            const positions = JSON.parse(localStorage.getItem('positions'));
+            if (positions) {
+                const container = document.getElementById('data-container');
+                const endpointList = document.getElementById('endpoint-list');
+                positions.forEach(id => {
+                    if (all){
+                        const section = document.getElementById('section-'+id);
+                        if (section) {
+                            container.appendChild(section);
+                        }
+                    }
+                    const shortcut = document.getElementById('shortcut-'+id);
+                    if (shortcut) {
+                        endpointList.appendChild(shortcut);
+                    }
+                });
+            }
+        }
+
+        function storeCheckboxValues() {
+            const checkboxes = document.querySelectorAll('.checkbox');
+            checkboxes.forEach(checkbox => {
+                localStorage.setItem(`checkbox-${checkbox.id}`, checkbox.checked);
+                document.getElementById(`shortcut-${checkbox.id}`).className = checkbox.checked ? 'inactive' : '';
+            });
+        }
+
+        async function executeQuery() {
+            const query = document.getElementById('shell').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const result = document.getElementById('shell-result');
+            const progressBar = document.getElementById('query-errors');
+            
+            if (!query.trim()) {
+                return;
+            }
+
+            result.innerHTML = '';
+            progressBar.style.width = '0%';
+            
+            let url = '/query?add_http_cors_header=1&default_format=JSONStringsEachRowWithProgress';
+            if (username) url += '&user=' + encodeURIComponent(username);
+            if (password) url += '&password=' + encodeURIComponent(password);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: query,
+                    headers: {
+                        'Authorization': 'never'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    result.innerHTML = `<div class="error">${errorText}</div>`;
+                    return;
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, {stream: true});
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        try {
+                            const json = JSON.parse(line);
+                            if (json.progress) {
+                                const progress = json.progress;
+                                const percent = progress.total_rows_to_read ? 
+                                    (progress.read_rows / progress.total_rows_to_read * 100) : 
+                                    (progress.elapsed_ns ? Math.min(99, progress.elapsed_ns / 1e9) : 0);
+                                progressBar.style.width = `${percent}%`;
+                            } else if (json.exception) {
+                                result.innerHTML += `<div class="error">${json.exception}</div>`;
+                            } else if (json.row) {
+                                result.innerHTML += JSON.stringify(json.row) + '\n';
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse JSON:', e);
+                        }
+                    }
+                }
+                progressBar.style.width = '100%';
+            } catch (e) {
+                result.innerHTML = `<div class="error">Error executing query: ${e.message}</div>`;
+            }
+        }
+
+        // Add SQL formatting function
+        function formatSQL() {
+            const textarea = document.getElementById('shell');
+            try {
+                const formatted = sqlFormatter.format(textarea.value, {
+                    language: 'sql',
+                    tabWidth: 2,
+                    useTabs: false,
+                    keywordCase: 'lower',
+                    indentStyle: 'standard',
+                    logicalOperatorNewline: 'before',
+                    tabulateAlias: false,
+                    commaPosition: 'after',
+                    expressionWidth: 50,
+                    linesBetweenQueries: 1,
+                    denseOperators: false,
+                    newlineBeforeSemicolon: false,
+                });
+                textarea.value = formatted;
+                highlightSQL();
+            } catch (e) {
+                console.error('SQL formatting error:', e);
+            }
+        }
+
+        // Add SQL syntax highlighting
+        function highlightSQL() {
+            const textarea = document.getElementById('shell');
+            const code = textarea.value;
+            const highlighted = hljs.highlight(code, {language: 'sql'}).value;
+            // Create a hidden div to show highlighted code
+            const div = document.getElementById('highlighted-sql') || document.createElement('pre');
+            div.id = 'highlighted-sql';
+            div.className = 'hljs sql';
+            div.style.position = 'absolute';
+            div.style.pointerEvents = 'none';
+            div.style.width = textarea.style.width;
+            div.style.height = textarea.style.height; 
+            // fix: the highlighted div wont resize  
+            //div.width = textarea.offsetWidth + 'px';
+            //div.height = textarea.offsetHeight + 'px';
+            
+            div.style.overflow = 'hidden';
+            div.innerHTML = highlighted;
+            if (!document.getElementById('highlighted-sql')) {
+                textarea.parentNode.insertBefore(div, textarea.nextSibling);
+            } 
+        }
+
+        // Initialize syntax highlighting
+        document.getElementById('shell').addEventListener('input', () => {
+            // Remove existing highlighting
+            const existing = document.querySelector('.hljs.sql');
+            if (existing) existing.remove();
+            highlightSQL();
+        });
+
+        // Initial highlighting
+        document.addEventListener('DOMContentLoaded', () => {
+            highlightSQL();
+        });
+
+        document.getElementById('shell').addEventListener('keydown', event => {
+            if ((event.metaKey || event.ctrlKey) && (event.keyCode == 13 || event.keyCode == 10)) {
+                executeQuery();
+                event.preventDefault();
+            }
+        });
+
+        setTimeout(document.reload, 1000*60*60*1);
+    </script>
+</body>
+</html>
