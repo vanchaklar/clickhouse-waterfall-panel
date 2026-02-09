@@ -11,6 +11,6 @@ insert into table function file('www/resources/graph-visualizer.js')
 select * from url('https://raw.githubusercontent.com/vanchaklar/clickhouse-waterfall-panel/refs/heads/main/www/resources/graph-visualizer.js');
 insert into table function file('www/resources/graphs.css')
 select * from url('https://raw.githubusercontent.com/vanchaklar/clickhouse-waterfall-panel/refs/heads/main/www/resources/graphs.css');
-insert into table function file('www/styles.css'')
+insert into table function file('www/styles.css')
 select * from url('https://raw.githubusercontent.com/vanchaklar/clickhouse-waterfall-panel/refs/heads/main/www/resources/styles.css');
 ```
