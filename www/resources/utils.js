@@ -816,7 +816,7 @@ async function executeQuery(query, params = null, show_progress = false) {
 }
 
 async function executeScript(script_path){
-    return executeQuery(`select * from executable(${script_path})`)
+    return executeQuery(`select * from executable('${script_path})'`)
 }
 
 async function executeShellQuery(mode = 'execute') {
