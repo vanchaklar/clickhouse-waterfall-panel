@@ -49,7 +49,10 @@ async function loadSources(source_type) {
     let query = `select '' as name`;
     switch (source_type) {
         case 'clickhouse':
-            query = `SELECT distinct host_name as name FROM system.clusters`;
+            query = `SELECT 'localhost' as name `
+                + `union all `
+                + `select name from system.named_collections where name like 'clickhouse_%'`
+                ;
             break;
         case 'mysql':
             query = `SELECT name FROM system.named_collections where name like 'mysql_%'`;
@@ -90,7 +93,13 @@ async function loadDatabases() {
     let query = `select '' as name`;
     switch (source_type) {
         case 'clickhouse':
-            query = `SELECT name FROM system.databases`;
+            if (source == 'localhost') {
+                query = `SELECT name FROM system.databases`;
+            } else if (source.startsWith('clickhouse_')) {
+                query = `select name from remote(${source}, database='system', db='system', table='databases') settings implicit_transaction=0`
+            } else {
+                query = `select '' as name`;
+            }
             break;
         case 'mysql':
             query = `select '' as name`;
@@ -176,7 +185,13 @@ async function loadTables() {
     let query = `select '' as name`;
     switch (source_type) {
         case 'clickhouse':
-            query = `SELECT name FROM system.tables WHERE database = '${database}'`;
+            if (source == 'localhost') {
+                query = `SELECT name FROM system.tables WHERE database = '${database}'`;
+            } else if (source.startsWith('clickhouse_')) {
+                query = `select name from remote(${source}, database='system', db='system', table='tables') WHERE database = '${database}' settings implicit_transaction=0`
+            } else {
+                query = `select '' as name`;
+            }
             break;
         case 'mysql':
             query = `select distinct TABLE_NAME as name from mysql(${source}, database='information_schema', table='TABLES') where TABLE_SCHEMA = '${schema}'`;
@@ -210,6 +225,94 @@ async function loadTables() {
     });
 }
 
+async function loadViewRefreshes() {
+    let query = `select \` \`, pipeline, database, view, status, progress, schedule,exception_type, exception from monitoring.view_refreshes order by pipeline, database, view`
+    let actions = function (row) {
+        let td = document.createElement('td')
+        let b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `executeQuery('system start view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
+        b.innerHTML = '⏵';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `executeQuery('system stop view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
+        b.innerHTML = '⏹';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `executeQuery('system cancel view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
+        b.innerHTML = '⏸';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `executeQuery('system refresh view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
+        b.innerHTML = '🗘';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `generateQuery('show-create', source_type='clickhouse', source='localhost', database='${row.database}', schema=undefined, table='${row.view}');loadViewRefreshes();`)
+        b.innerHTML = '🗐';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `executeQuery('select extractAlterRefresh({database:String},{view:String}) as value', { 'param_database': '${row.database}', 'param_view': '${row.view}'}).then(function(data){setShellValue(data.data[0].value);loadViewRefreshes();})`)
+        b.innerHTML = '🕰';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `executeQuery('select extractAlterSelect({database:String},{view:String}) as value', { 'param_database': '${row.database}', 'param_view': '${row.view}'}).then(function(data){setShellValue(data.data[0].value);loadViewRefreshes();})`)
+        b.innerHTML = '🖉';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `executeQuery('select extractAlterComment({database:String},{view:String}) as value', { 'param_database': '${row.database}', 'param_view': '${row.view}'}).then(function(data){setShellValue(data.data[0].value);loadViewRefreshes();})`)
+        b.innerHTML = '🖆';
+        td.appendChild(b)
+        return td
+    }
+    let data = await executeQuery(query)
+    let table = createTable(data, actions)
+    let section = document.getElementById('section-view_refreshes')
+    let old = section.getElementsByTagName('table');
+    if (old.length > 0) {
+        section.removeChild(old[0]);
+    }
+    section.appendChild(table)
+    console.log('Data loaded successfully:', section);
+}
+
+async function loadWaterfallTables() {
+    let section = document.getElementById(`section-waterfall_tables`);
+    isVisible = !section.getElementsByTagName('input')[0].checked;
+    if (!isVisible) {
+        return;
+    }
+    let query = `select * from admin_panel.waterfall_tables`
+    let actions = function (row) {
+        let td = document.createElement('td')
+        let b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `generateQuery('select',source_type='clickhouse',source=undefined, database='${row.database}',schema=undefined, table='${row.name}');loadWaterfallTables();`)
+        b.innerHTML = '🔍';
+        td.appendChild(b)
+        b = document.createElement('button')
+        b.setAttribute('class', 'action-button')
+        b.setAttribute('onclick', `generateQuery('show-create',source_type='clickhouse',source=undefined, database='${row.database}',schema=undefined, table='${row.name}');loadWaterfallTables();`)
+        b.innerHTML = '🖉';
+        td.appendChild(b)
+        return td
+    }
+    let data = await executeQuery(query)
+    let table = createTable(data, actions)
+    let old = section.getElementsByTagName('table');
+    if (old.length > 0) {
+        section.removeChild(old[0]);
+    }
+    section.appendChild(table)
+    console.log('Data loaded successfully:', section);
+}
+
 async function generateQuery(
     mode = 'select',
     source_type = undefined,
@@ -227,10 +330,18 @@ async function generateQuery(
     let query = '';
     switch (source_type) {
         case 'clickhouse':
-            if (mode === 'show-create') {
-                query = `show create ${database}.${table}`
-            } else {
-                query = `SELECT * FROM system.columns where database = '${database}' AND table = '${table}' and default_kind != 'EPHEMERAL'`;
+            if (source === 'localhost') {
+                if (mode === 'show-create') {
+                    query = `show create ${database}.${table}`
+                } else {
+                    query = `SELECT * FROM system.columns where database = '${database}' AND table = '${table}' and default_kind != 'EPHEMERAL'`;
+                }
+            } else if (source.startsWith('clickhouse_')) {
+                if (mode === 'show-create') {
+                    query = `SELECT formatQuery(create_table_query) as statement FROM remote(${source}, database='system', db='system', table='tables') where database = '${database}' AND table = '${table}' settings implicit_transaction=0`;
+                } else {
+                    query = `SELECT * FROM remote(${source}, database='system', db='system', table='columns') where database = '${database}' AND table = '${table}' and default_kind != 'EPHEMERAL' settings implicit_transaction=0`;
+                }
             }
             break;
         case 'mysql':
@@ -261,19 +372,21 @@ async function generateQuery(
     }
     if (mode === 'show-create') {
         query = data.data[0]['statement']
-        let shell = document.getElementById('shell');
         query = query.replaceAll('\\r\\n', '\n')
         query = query.replaceAll('\\n', '\n')
         console.log(query)
-        shell.value = query;
-        shell.focus();
+        setShellValue(query)
         return query;
     }
     source_columns = data.data;
     let columns = source_columns.map(row => row.name).join(',\n');
     switch (source_type) {
         case 'clickhouse':
-            query = formatSQL(`SELECT ${columns} FROM ${database}.${table} limit 100`);
+            if (source === 'localhost') {
+                query = formatSQL(`SELECT ${columns} FROM ${database}.${table} limit 100`);
+            } else if (source.startsWith('clickhouse_')) {
+                query = formatSQL(`SELECT ${columns} FROM remote(${source}, database='${database}', db='${database}', table='${table}') limit 100 settings implicit_transaction=0`);
+            }
             break;
         case 'mysql':
             query = formatSQL(`SELECT ${columns} FROM mysql(${source}, database='${schema}', table='${table}') limit 100`);
@@ -376,9 +489,15 @@ async function generateQuery(
                             order_by_keys.push(`${row.name} asc`)
                         }
                     }
-                    // clickhouse: TODO
+                    // clickhouse:
+                    if (row.is_in_primary_key === 1) {
+                        primary_key = row.name
+                    }
+                    if (row.is_in_sorting_key === 1) {
+                        uniqe_key = row.name
+                    }
 
-                    // mysql: TODO
+                    // mysql:
                     if (row.COLUMN_KEY === 'PRI') {
                         primary_key = row.COLUMN_NAME
                         uniqe_key = row.COLUMN_NAME
@@ -387,7 +506,7 @@ async function generateQuery(
                         primary_key = row.COLUMN_NAME
                         uniqe_key = row.COLUMN_NAME
                     }
-                    // postgresql: TODO
+                    // postgresql:
                     if (row.is_identity === 'YES') {
                         primary_key = row.name
                         uniqe_key = row.name
@@ -487,9 +606,7 @@ comment '${table_name}'`
     }
 
     // Set the shell textarea value to the generated query
-    let shell = document.getElementById('shell');
-    shell.value = query;
-    shell.focus();
+    setShellValue(query)
     return query;
 }
 
@@ -501,6 +618,18 @@ async function clearQuery() {
     document.getElementById('shell-result').innerText = '';
     let progressBar = document.getElementById('query-errors');
     progressBar.innerHTML = '';
+}
+
+function setShellValue(value) {
+    if (value instanceof Promise) {
+        console.log(value);
+        throw new Error("invalid input: Promise");
+    }
+    let shellTextarea = document.getElementById('shell');
+    shellTextarea.value = value;
+    shellTextarea.focus();
+    shellTextarea.lang = 'sql';
+    highlightSQL()
 }
 
 function createTable(data, extra_cell_content_function = null) {
@@ -598,11 +727,7 @@ function createTable(data, extra_cell_content_function = null) {
                 }
             }
             td.onclick = () => {
-                let shellTextarea = document.getElementById('shell');
-                shellTextarea.value = value;
-                shellTextarea.focus();
-                shellTextarea.lang = 'sql';
-                highlightSQL()
+                setShellValue(value)
             };
             td.innerText = value;
 
@@ -729,7 +854,7 @@ async function executeQuery(query, params = null, show_progress = false) {
     let default_format = show_progress ? 'JSONEachRowWithProgress' : 'JSON';
     let username = document.getElementById('username').value;
     let password = document.getElementById('password').value;
-    let url = `/query?add_http_cors_header=1&use_concurrency_control=0&workload=admin&default_format=${default_format}&extremes=1&implicit_select=1`;
+    let url = `/query?add_http_cors_header=1&use_concurrency_control=0&workload=admin&default_format=${default_format}&extremes=1&implicit_select=1&implicit_transaction=0`;
     if (params) {
         Object.entries(params).forEach((v) => {
             url += `&${encodeURIComponent(v[0])}=${encodeURIComponent(v[1].replaceAll('\n', '\\n'))}`
@@ -815,7 +940,7 @@ async function executeQuery(query, params = null, show_progress = false) {
 
 }
 
-async function executeScript(script_path){
+async function executeScript(script_path) {
     return executeQuery(`select * from executable('${script_path}','LineAsString','result String')`)
 }
 
@@ -939,7 +1064,6 @@ function updateProgress(progress) {
 
 }
 
-// Add SQL formatting function
 function formatSQL(query = null) {
     if (query) {
         return sqlFormatter.format(query, {
@@ -980,7 +1104,6 @@ function formatSQL(query = null) {
     }
 }
 
-// Add SQL syntax highlighting
 function highlightSQL() {
     let textarea = document.getElementById('shell');
     let code = textarea.value;
@@ -1030,7 +1153,7 @@ function createParamInputs() {
         if (!input) {
 
             let action = document.createElement('button');
-            action.setAttribute('onclick', `document.getElementById('shell').value = getElementById('param_${param}').value`);
+            action.setAttribute('onclick', `setShellValue(getElementById('param_${param}').value)`);
             action.setAttribute('class', 'action-button')
             action.innerHTML = '🡸'
             paramContainer.appendChild(action)
@@ -1065,81 +1188,6 @@ function createParamInputs() {
         }
     });
 }
-
-async function loadViewRefreshes() {
-    let query = `select \` \`, pipeline, database, view, status, progress, schedule,exception_type, exception from monitoring.view_refreshes order by pipeline`
-    let actions = function (row) {
-        let td = document.createElement('td')
-        let b = document.createElement('button')
-        b.setAttribute('class', 'action-button')
-        b.setAttribute('onclick', `executeQuery('system start view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
-        b.innerHTML = '⏵';
-        td.appendChild(b)
-        b = document.createElement('button')
-        b.setAttribute('class', 'action-button')
-        b.setAttribute('onclick', `executeQuery('system stop view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
-        b.innerHTML = '⏹';
-        td.appendChild(b)
-        b = document.createElement('button')
-        b.setAttribute('class', 'action-button')
-        b.setAttribute('onclick', `executeQuery('system cancel view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
-        b.innerHTML = '⏸';
-        td.appendChild(b)
-        b = document.createElement('button')
-        b.setAttribute('class', 'action-button')
-        b.setAttribute('onclick', `executeQuery('system refresh view {database:Identifier}.{view:Identifier}', { 'param_database': '${row.database}', 'param_view': '${row.view}'});loadViewRefreshes();`)
-        b.innerHTML = '🗘';
-        td.appendChild(b)
-        b = document.createElement('button')
-        b.setAttribute('class', 'action-button')
-        b.setAttribute('onclick', `generateQuery('show-create',source_type='clickhouse',source=undefined, database='${row.database}',schema=undefined, table='${row.view}');loadViewRefreshes();`)
-        b.innerHTML = '🖉';
-        td.appendChild(b)
-        return td
-    }
-    let data = await executeQuery(query)
-    let table = createTable(data, actions)
-    let section = document.getElementById('section-view_refreshes')
-    let old = section.getElementsByTagName('table');
-    if (old.length > 0) {
-        section.removeChild(old[0]);
-    }
-    section.appendChild(table)
-    console.log('Data loaded successfully:', section);
-}
-
-
-async function loadWaterfallTables() {
-    let section = document.getElementById(`section-waterfall_tables`);
-    isVisible = !section.getElementsByTagName('input')[0].checked;
-    if (!isVisible) {
-        return;
-    }
-    let query = `select * from admin_panel.waterfall_tables`
-    let actions = function (row) {
-        let td = document.createElement('td')
-        let b = document.createElement('button')
-        b.setAttribute('class', 'action-button')
-        b.setAttribute('onclick', `generateQuery('select',source_type='clickhouse',source=undefined, database='${row.database}',schema=undefined, table='${row.name}');loadWaterfallTables();`)
-        b.innerHTML = '🔍';
-        td.appendChild(b)
-        b = document.createElement('button')
-        b.setAttribute('class', 'action-button')
-        b.setAttribute('onclick', `generateQuery('show-create',source_type='clickhouse',source=undefined, database='${row.database}',schema=undefined, table='${row.name}');loadWaterfallTables();`)
-        b.innerHTML = '🖉';
-        td.appendChild(b)
-        return td
-    }
-    let data = await executeQuery(query)
-    let table = createTable(data, actions)
-    let old = section.getElementsByTagName('table');
-    if (old.length > 0) {
-        section.removeChild(old[0]);
-    }
-    section.appendChild(table)
-    console.log('Data loaded successfully:', section);
-}
-
 
 function startWatcher() {
     let query = document.getElementById('watcher_query').value;

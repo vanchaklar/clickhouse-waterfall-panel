@@ -321,3 +321,8 @@ button.action-button {
     background-color: #262626;
     padding: 0 10px;
 }
+a {
+    color: #68bdff;
+    /* text-decoration: none; */
+
+}

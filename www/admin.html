@@ -131,9 +131,9 @@
         </div>
     </div>
     <div id="sidebar">
-
         <div id="section-requests-status"><input type="checkbox" id="requests-status" class="checkbox">
-            <label for="requests-status">requests</label>
+            <label for="requests-status"></label>
+            <div class="tab">• <a href="/monitoring">monitoring</a></div><br>
             <div id="requests-status-container" class="tab">Requests: 0<br>Responses: 0</div>
         </div>
         <div><input type="checkbox" id="show-params" class="checkbox" checked /><label for="show-params">params</label>
@@ -170,6 +170,9 @@
         <div id="section-shortcuts"><input type="checkbox" id="shortcuts" class="checkbox" checked />
             <label for="shortcuts">shortcuts</label>
             <div id="shortcuts-container" class="tab">
+                <button onclick="executeQuery('kill query where user = currentUser()')"
+                    class="action-button">✖</button><span style="display: inline-block; margin-left: 10px;">kill my
+                    queries</span><br>
                 <button onclick="executeQuery('system start views')" class="action-button">▶</button><span
                     style="display: inline-block; margin-left: 10px;">start views</span><br>
                 <button onclick="executeQuery('system stop views')" class="action-button">■</button><span
