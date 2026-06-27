@@ -280,6 +280,16 @@ button {
 .hljs {
     background: transparent !important;
 }
+.q-kw  { color: var(--syntax-keyword); font-weight: bold; }
+.q-id  { color: var(--syntax-identifier); }
+.q-fn  { color: var(--syntax-function); }
+.q-num { color: var(--syntax-number); }
+.q-str { color: var(--syntax-string); }
+.q-qid { color: var(--syntax-qident); }
+.q-com { color: var(--syntax-comment); font-style: italic; }
+.q-op  { color: var(--syntax-operator); }
+.q-err { color: var(--syntax-error); text-decoration: underline wavy; }
+
 
 select {
     background-color: #1e1e1e;
