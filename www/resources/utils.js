@@ -1,9 +1,3 @@
-
-// these libraries are used for SQL formatting and syntax highlighting
-// https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js
-// https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/sql.min.js
-// https://cdnjs.cloudflare.com/ajax/libs/sql-formatter/12.2.3/sql-formatter.min.js
-
 function showError(...message) {
     message = message.join(' ');
     console.error(message)
@@ -1107,7 +1101,8 @@ function formatSQL(query = null) {
 function highlightSQL() {
     let textarea = document.getElementById('shell');
     let code = textarea.value;
-    let highlighted = hljs.highlight(code, { language: 'sql' }).value;
+    const tokens = await tokenize(code);
+    const highlighted = renderQueryBackdrop(code, tokens, []);
     // Create a hidden div to show highlighted code
     let div = document.getElementById('highlighted-sql') || document.createElement('pre');
     div.id = 'highlighted-sql';
@@ -1134,6 +1129,186 @@ function highlightSQL() {
     div.scrollLeft = textarea.scrollLeft;
     createParamInputs();
 }
+// from clickhouse web ui
+function renderQueryBackdrop(text, tokens, boundaries) {
+    let html = '';
+    let offset = 0;
+    for (let i = 0; i < tokens.length; ++i) {
+        const elem = tokens[i];
+        const tokStart = offset;
+        const tokEnd = offset + elem.token.length;
+        offset = tokEnd;
+        const cls = tokenClass(tokens, i);
+        const escaped = escapeHTML(elem.token);
+        if (cls) {
+            html += '<span class="' + cls + '">' + escaped + '</span>';
+        } else {
+            html += escaped;
+        }
+    }
+    if (offset < text.length) {
+        html += '<span class="q-err">' + escapeHTML(text.substring(offset)) + '</span>';
+    }
+    if (html.endsWith('\n')) html += ' ';
+    return html
+}
+
+function escapeHTML(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/// Numeric TokenType values, matching the order of the C++ enum in src/Parsers/Lexer.h.
+/// Only the categories we actually classify are named; everything else is treated as
+/// "default" (unstyled) and renders in the canonical text color via the diff blend.
+const TT = {
+    Whitespace: 0, Comment: 1, BareWord: 2, Number: 3, StringLiteral: 4, QuotedIdentifier: 5,
+    OpeningRoundBracket: 6, ClosingRoundBracket: 7,
+    Semicolon: 13, Asterisk: 16, HereDoc: 17, DollarSign: 18,
+    Plus: 19, Minus: 20, Slash: 21, Percent: 22, Arrow: 23,
+    QuestionMark: 24, Colon: 25, Caret: 26, DoubleColon: 27,
+    Equals: 28, NotEquals: 29, Less: 30, Greater: 31,
+    LessOrEquals: 32, GreaterOrEquals: 33, Spaceship: 34,
+    PipeMark: 35, Concatenation: 36, At: 37, DoubleAt: 38,
+};
+
+/// SQL keywords recognized for highlighting. The lexer reports them as BareWord, so we
+/// disambiguate identifiers from keywords here. Comparisons are case-insensitive.
+const SQL_KEYWORDS = new Set([
+    'ADD', 'AFTER', 'ALL', 'ALTER', 'AND', 'ANTI', 'ANY', 'ARRAY', 'AS', 'ASC', 'ASCENDING',
+    'ASOF', 'AST', 'ASYNC', 'ATTACH', 'BACKUP', 'BEGIN', 'BETWEEN', 'BOTH', 'BY',
+    'CACHE', 'CASCADE', 'CASE', 'CAST', 'CHANGE', 'CHANGED', 'CHECK', 'CLEAR', 'CLUSTER',
+    'CODEC', 'COLLATE', 'COLUMN', 'COLUMNS', 'COMMENT', 'COMMIT', 'CONSTRAINT', 'CREATE',
+    'CROSS', 'CUBE', 'CURRENT',
+    'DATABASE', 'DATABASES', 'DAY', 'DEDUPLICATE', 'DEFAULT', 'DELETE', 'DESC', 'DESCENDING',
+    'DESCRIBE', 'DETACH', 'DICTIONARIES', 'DICTIONARY', 'DISK', 'DISTINCT', 'DISTRIBUTED',
+    'DROP', 'ELSE', 'END', 'ENGINE', 'ESTIMATE', 'EVENTS', 'EXCEPT', 'EXCHANGE', 'EXISTS',
+    'EXPLAIN', 'EXPRESSION', 'EXTENDED', 'EXTRACT',
+    'FALSE', 'FETCH', 'FETCHES', 'FILE', 'FILESYSTEM', 'FINAL', 'FIRST', 'FLUSH', 'FOLLOWING',
+    'FOR', 'FOREIGN', 'FORMAT', 'FREEZE', 'FROM', 'FULL', 'FUNCTION',
+    'GLOBAL', 'GRANT', 'GROUP', 'GROUPS', 'HAVING', 'HIERARCHICAL', 'HOUR',
+    'ID', 'IDENTIFIED', 'IF', 'ILIKE', 'IN', 'INDEX', 'INF', 'INHERIT', 'INJECTIVE',
+    'INNER', 'INSERT', 'INTERSECT', 'INTERVAL', 'INTO', 'INVISIBLE', 'IS', 'IS_OBJECT_ID',
+    'JOIN', 'KEY', 'KEYED', 'KILL',
+    'LAST', 'LATERAL', 'LAYOUT', 'LEADING', 'LEFT', 'LIFETIME', 'LIKE', 'LIMIT', 'LIMITS',
+    'LIVE', 'LOCAL', 'LOGS',
+    'MATERIALIZE', 'MATERIALIZED', 'MAX', 'MERGES', 'MICROSECOND', 'MILLISECOND', 'MIN',
+    'MINUTE', 'MODIFY', 'MONTH', 'MOVE', 'MUTATION',
+    'NAN_SQL', 'NEXT', 'NO', 'NONE', 'NOT', 'NULL', 'NULLS',
+    'OFFSET', 'ON', 'ONLY', 'OPTIMIZE', 'OPTION', 'OR', 'ORDER', 'OUTER', 'OUTFILE', 'OVER',
+    'PARTITION', 'PASTE', 'PERMANENTLY', 'PLAN', 'POPULATE', 'PRECEDING', 'PRECISION',
+    'PREWHERE', 'PRIMARY', 'PROFILE', 'PROJECTION', 'QUARTER', 'QUERY', 'QUOTA',
+    'RANDOMIZED', 'RANGE', 'RECURSIVE', 'REFRESH', 'REGEXP', 'RELOAD', 'REMOTE', 'RENAME',
+    'REPLACE', 'REPLICA', 'REPLICAS', 'RESET', 'RESTORE', 'RESTRICT', 'RESTRICTIVE',
+    'RETURNS', 'REVOKE', 'RIGHT', 'ROLE', 'ROLLBACK', 'ROLLUP', 'ROW', 'ROWS',
+    'SAMPLE', 'SECOND', 'SELECT', 'SEMI', 'SENDS', 'SET', 'SETS', 'SETTINGS', 'SHARD',
+    'SHOW', 'SIGNED', 'SOURCE', 'SQL_SECURITY', 'START', 'STEP', 'STORAGE', 'STRICT',
+    'STRICTLY_ASCENDING', 'SUBPARTITION', 'SUBSTRING', 'SUSPEND', 'SYNC', 'SYNTAX', 'SYSTEM',
+    'TABLE', 'TABLES', 'TEMPORARY', 'TEST', 'THEN', 'TIES', 'TIMESTAMP', 'TO', 'TOP',
+    'TOTALS', 'TRACKING', 'TRAILING', 'TRANSACTION', 'TRIGGER', 'TRIM', 'TRUE', 'TRUNCATE',
+    'TYPE',
+    'UNBOUNDED', 'UNFREEZE', 'UNION', 'UNIQUE', 'UNSIGNED', 'UPDATE', 'USE', 'USING',
+    'UUID', 'VALUES', 'VARYING', 'VIEW', 'VIRTUAL', 'VISIBLE',
+    'WATCH', 'WEEK', 'WHEN', 'WHERE', 'WINDOW', 'WITH', 'WORK', 'WRITABLE',
+    'XOR', 'YEAR', 'ZKPATH',
+]);
+
+/// Map a single token to a CSS class. For BareWords we also peek at the next
+/// non-whitespace token to distinguish a function call (`foo(`) from a plain
+/// identifier — the lexer alone cannot tell them apart.
+function tokenClass(tokens, i) {
+    const elem = tokens[i];
+    switch (elem.type) {
+        case TT.Comment: return 'q-com';
+        case TT.Number: return 'q-num';
+        case TT.StringLiteral:
+        case TT.HereDoc: return 'q-str';
+        case TT.QuotedIdentifier: return 'q-qid';
+        case TT.BareWord: {
+            if (SQL_KEYWORDS.has(elem.token.toUpperCase())) return 'q-kw';
+            for (let j = i + 1; j < tokens.length; ++j) {
+                if (tokens[j].type === TT.Whitespace) continue;
+                return tokens[j].type === TT.OpeningRoundBracket ? 'q-fn' : 'q-id';
+            }
+            return 'q-id';
+        }
+        case TT.Asterisk: case TT.Plus: case TT.Minus: case TT.Slash: case TT.Percent:
+        case TT.Arrow: case TT.QuestionMark: case TT.Colon: case TT.DoubleColon: case TT.Caret:
+        case TT.Equals: case TT.NotEquals:
+        case TT.Less: case TT.Greater: case TT.LessOrEquals: case TT.GreaterOrEquals:
+        case TT.Spaceship: case TT.PipeMark: case TT.Concatenation:
+        case TT.At: case TT.DoubleAt: case TT.DollarSign:
+            return 'q-op';
+        default:
+            return '';
+    }
+}
+
+let lexer_module;
+async function loadLexer() {
+    // base64 -w0 build/src/Parsers/Lexer.wasm
+    const lexer_base64 = "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A08NAkEBIQgDQCACLQAAIgVBMGshAQJAAkAgBwRAIAFB/wFxQQpJIAVBwQBrQQZJcg0CIAVB4QBrQQZPDQEMAgsgAUH/AXFBCkkNAQsgCCAFQd8AR3JBAXENBAJAIAJBAWoiCSADTw0AIAktAAAiBUEwayEBIAcEQCABQf8BcUEKSSAFQcEAa0EGSXINASAFQeEAa0EGTw0HDAELIAFB/wFxQQlLDQYLIAMgCUYNBAsgBiACQQFqIgI2AgBBACEIIAIgA0kNAAsMAgsgBiACQQFqIgI2AgBBACEIIAIgA0cNAAsLIAJBAWoiASADTw0AIAItAAAhBQJAIAcEQCAFQSByQfAARw0CDAELIAVBIHJB5QBHDQELIAYgATYCAAJAIAJBAmogA08NAAJAIAEtAABBK2sOAwABAAELIAYgAUEBaiIBNgIAIAEgA08NAgtBASECA0AgAS0AACIFQTBrQf8BcUEKTwRAIAIgBUHfAEdyQQFxDQMgAUEBaiICIANPDQMgAi0AAEEwa0H/AXFBCUsNAwsgBiABQQFqIgE2AgBBACECIAEgA0cNAAsMAQsgAiEBCwJ/AkACQCABIANPDQAgAS0AACICQd8ARiACQTBrQf8BcUEKSXJFIAJB3wFxQcEAa0H/AXFBGUtxDQAgAUEBaiEFA0AgBiAFIgE2AgAgASADTw0CIAFBAWohBSABLQAAIgdBMGshAiAHQd8ARiACQf8BcUEKSXIgB0HfAXFBwQBrQf8BcUEaSXINAAsgAUEBawwCCyAAIAE2AggMCgsgAUEBawshAwJAIAEgBE0NACAEQQFrIQUDQCAFQQFqIgUtAAAiAkEkRiACQd8ARnIgAkEwa0H/AXFBCklyRSACQd8BcUHBAGtB/wFxQRpPcUUEQCADIAVLDQEMAgsLIAAgATYCCCAAIAQ2AgQgAEEvOgAADwsMCQsgBiAEQQJqIgE2AgACQCABIANGDQADQCABLQAAQQpGDQEgAUEBaiIBIANHDQALIAMhAQsLIAAgATYCCCAAIAQ2AgQgAEEBOgAACyAGIAE2AgAPCyAAIAE2AgggACAENgIEIABBADoAAA8LIAAgBEEBaiIANgIIDAILIAAgBEECaiIANgIIDAELIAAgATYCCCAAIAQ2AgQgAEEoOgAADwsgBiAANgIADwsgACAENgIEIABBAzoAAA8LIAAgATYCCCAAIAQ2AgQgAEECOgAACyUAIABBADoAECAAIAM2AgwgACACNgIIIAAgATYCBCAAIAE2AgALNgEBfyMAQRBrIgMkACADQQRqIAAQASABIAMoAgg2AgAgAiADKAIMNgIAIAMtAAQgA0EQaiQACwcAIABBAUsLBwAgAEEnSwsHACAAQSdGCwsIAQBBgAgLARQAeQlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQEFY2xhbmdZMjAuMC4wZ2l0IChnaXRAZ2l0aHViLmNvbTpsbHZtL2xsdm0tcHJvamVjdC5naXQgNmNiYzY0ZWQ5MjJjYzY5YmMyOTJkMzk0YmE1YzY4MWZhMzA5ZjQwNCkAaw90YXJnZXRfZmVhdHVyZXMGKw9tdXRhYmxlLWdsb2JhbHMrE25vbnRyYXBwaW5nLWZwdG9pbnQrC2J1bGstbWVtb3J5KwhzaWduLWV4dCsPcmVmZXJlbmNlLXR5cGVzKwptdWx0aXZhbHVl";
+
+    if (!lexer_module) {
+        const binary = atob(lexer_base64);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        lexer_module = await WebAssembly.instantiate(bytes);
+    }
+}
+
+async function tokenize(query) {
+    await loadLexer();
+
+    let exports = lexer_module.instance.exports;
+    let buffer = exports.memory.buffer;
+    let memory_offset = 0;
+
+    /// Allocate memory for the lexer object
+    const lexer = new Uint8Array(buffer, memory_offset, exports.clickhouse_lexer_size);
+    memory_offset += exports.clickhouse_lexer_size;
+
+    /// Allocate the query
+    const bytes = new TextEncoder().encode(query);
+    const query_array = new Uint8Array(buffer, memory_offset, bytes.length);
+    query_array.set(bytes);
+    const query_begin = memory_offset;
+    memory_offset += bytes.length;
+    const query_end = memory_offset;
+
+    /// Initialize the lexer
+    exports.clickhouse_lexer_create(lexer, query_begin, query_end, 65536);
+
+    /// Allocate the out ptrs
+    const token_begin = memory_offset;
+    memory_offset += 4;
+    const token_end = memory_offset;
+    memory_offset += 4;
+
+    let result = [];
+
+    while (true) {
+        const token_type = exports.clickhouse_lexer_next_token(lexer, token_begin, token_end);
+        if (exports.clickhouse_lexer_token_is_error(token_type) || exports.clickhouse_lexer_token_is_end(token_type)) {
+            break;
+        }
+
+        const view = new DataView(buffer);
+        const begin = view.getUint32(token_begin, true);
+        const end = view.getUint32(token_end, true);
+
+        const token_bytes = new Uint8Array(buffer, begin, end - begin);
+        let token = new TextDecoder().decode(token_bytes);
+
+        result.push({type: token_type, significant: exports.clickhouse_lexer_token_is_significant(token_type), token: token});
+    }
+
+    return result;
+}
+// /from clickhouse web ui 
 
 function getParamsFromShellQuery() {
     let params = [];
